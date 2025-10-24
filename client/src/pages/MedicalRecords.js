@@ -239,14 +239,14 @@ const MedicalRecords = () => {
 
     const mostCommon = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0];
     const recentRecords = records.filter(r => {
-      const date = new Date(r.date);
+      const date = new Date(r.recordDate || r.createdAt);
       const monthAgo = new Date();
       monthAgo.setMonth(monthAgo.getMonth() - 1);
       return date >= monthAgo;
     });
 
     const oldestRecord = records.reduce((oldest, record) => 
-      new Date(record.date) < new Date(oldest.date) ? record : oldest
+      new Date(record.recordDate || record.createdAt) < new Date(oldest.recordDate || oldest.createdAt) ? record : oldest
     );
 
     const insights = {
@@ -254,7 +254,7 @@ const MedicalRecords = () => {
       mostCommonType: mostCommon[0],
       mostCommonCount: mostCommon[1],
       recentActivity: recentRecords.length,
-      oldestRecord: formatDate(oldestRecord.date),
+      oldestRecord: formatDate(oldestRecord.recordDate || oldestRecord.createdAt),
       avgPerMonth: (records.length / 12).toFixed(1),
       recommendations: [
         records.length > 20 ? '✅ Great job maintaining your health records!' : '💡 Try to upload more records for better health tracking',
@@ -278,7 +278,7 @@ const MedicalRecords = () => {
       categoryData[record.recordType] = (categoryData[record.recordType] || 0) + 1;
       
       // Monthly analytics
-      const month = new Date(record.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+      const month = new Date(record.recordDate || record.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
       monthlyData[month] = (monthlyData[month] || 0) + 1;
     });
 
@@ -289,7 +289,7 @@ const MedicalRecords = () => {
   const getTimelineData = () => {
     const grouped = {};
     records.forEach(record => {
-      const month = new Date(record.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+      const month = new Date(record.recordDate || record.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
       if (!grouped[month]) grouped[month] = [];
       grouped[month].push(record);
     });
@@ -337,11 +337,12 @@ const MedicalRecords = () => {
 
   const exportToCSV = () => {
     const csvContent = [
-      ['Title', 'Category', 'Date', 'Description', 'File Name', 'File Size'],
+      ['Title', 'Category', 'Date', 'Uploaded At', 'Description', 'File Name', 'File Size'],
       ...filteredRecords.map(record => [
         record.title,
         record.recordType,
-        formatDate(record.date),
+        formatDate(record.recordDate || record.createdAt),
+        formatDate(record.uploadedAt || record.createdAt),
         record.description || '',
         record.fileName,
         formatFileSize(record.fileSize)
@@ -378,9 +379,9 @@ const MedicalRecords = () => {
   }).sort((a, b) => {
     switch(sortBy) {
       case 'date-desc':
-        return new Date(b.date) - new Date(a.date);
+        return new Date(b.recordDate || b.createdAt) - new Date(a.recordDate || a.createdAt);
       case 'date-asc':
-        return new Date(a.date) - new Date(b.date);
+        return new Date(a.recordDate || a.createdAt) - new Date(b.recordDate || b.createdAt);
       case 'title-asc':
         return a.title.localeCompare(b.title);
       case 'title-desc':
@@ -448,7 +449,7 @@ const MedicalRecords = () => {
             <span className="stat-label">Storage Used</span>
           </div>
           <div className="stat-item">
-            <span className="stat-value">{records.length > 0 ? formatDate(records[0].date) : 'N/A'}</span>
+            <span className="stat-value">{records.length > 0 ? formatDate(records[0].uploadedAt || records[0].createdAt) : 'N/A'}</span>
             <span className="stat-label">Latest Upload</span>
           </div>
         </div>
@@ -600,9 +601,14 @@ const MedicalRecords = () => {
                     </span>
                   </div>
                   <p className="record-date">
-                    📅 {formatDate(record.date)}
-                    <span className="relative-time"> • {getRelativeTime(record.date)}</span>
+                    📅 {formatDate(record.recordDate || record.createdAt)}
+                    <span className="relative-time"> • {getRelativeTime(record.recordDate || record.createdAt)}</span>
                   </p>
+                  {record.uploadedAt && (
+                    <p className="record-uploaded" style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.25rem' }}>
+                      📤 Uploaded: {formatDate(record.uploadedAt)}
+                    </p>
+                  )}
                   {record.description && (
                     <p className="record-description">{record.description}</p>
                   )}
@@ -813,7 +819,11 @@ const MedicalRecords = () => {
                 </div>
                 <div className="detail-row">
                   <strong>Date:</strong>
-                  <span>{formatDate(selectedRecord.date)}</span>
+                  <span>{formatDate(selectedRecord.recordDate || selectedRecord.createdAt)}</span>
+                </div>
+                <div className="detail-row">
+                  <strong>Uploaded:</strong>
+                  <span>{formatDate(selectedRecord.uploadedAt || selectedRecord.createdAt)}</span>
                 </div>
                 <div className="detail-row">
                   <strong>File Name:</strong>
@@ -991,7 +1001,7 @@ const MedicalRecords = () => {
                             <div className="timeline-title">{record.title}</div>
                             <div className="timeline-meta">
                               <span className="timeline-category">{record.recordType}</span>
-                              <span className="timeline-date">{formatDate(record.date)}</span>
+                              <span className="timeline-date">{formatDate(record.recordDate || record.createdAt)}</span>
                             </div>
                           </div>
                         </div>

@@ -40,8 +40,9 @@ router.post('/', [
       user: req.user.id,
       title,
       recordType: category, // Map category to recordType for the model
-      date: new Date(date),
-      description
+      recordDate: new Date(date),
+      description,
+      uploadedAt: new Date()
     };
 
     // Add file information if file was uploaded
