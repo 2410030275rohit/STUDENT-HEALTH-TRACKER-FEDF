@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
 // eslint-disable-next-line no-unused-vars
@@ -115,6 +116,14 @@ const Chatbot = () => {
     return "I can help with general health topics like nutrition, exercise, sleep, stress management, and wellness tips. Could you please be more specific about what health topic you'd like to discuss?";
   };
 
+  const toChatHistory = (msgs) => {
+    // Convert local message objects to OpenAI-style roles for context
+    return msgs
+      .filter(m => m && m.text && (m.sender === 'user' || m.sender === 'bot'))
+      .slice(-12)
+      .map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text }));
+  };
+
   const sendMessage = async () => {
     if (!inputMessage.trim()) return;
 
@@ -129,18 +138,35 @@ const Chatbot = () => {
     setInputMessage('');
     setIsTyping(true);
 
-    // Simulate typing delay
-    setTimeout(() => {
-      const botResponse = {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post('/api/chatbot/chat', {
+        message: userMessage.text,
+        history: toChatHistory(messages)
+      }, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
+      const botText = response?.data?.data?.botResponse || generateResponse(userMessage.text);
+      const botMessage = {
         id: Date.now() + 1,
-        text: generateResponse(inputMessage),
+        text: botText,
         sender: 'bot',
         timestamp: new Date()
       };
-
-      setMessages(prev => [...prev, botResponse]);
+      setMessages(prev => [...prev, botMessage]);
+    } catch (err) {
+      // Fallback to local generator if API call fails
+      const botMessage = {
+        id: Date.now() + 1,
+        text: generateResponse(userMessage.text),
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, botMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1000 + Math.random() * 2000); // Random delay between 1-3 seconds
+    }
   };
 
   const handleKeyPress = (e) => {

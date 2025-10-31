@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { LANGS, t, tx } from '../utils/i18n';
 
 const MedicalRecords = () => {
   // eslint-disable-next-line no-unused-vars
@@ -26,6 +27,19 @@ const MedicalRecords = () => {
   const [shareEmail, setShareEmail] = useState('');
   const [showAIInsights, setShowAIInsights] = useState(false);
   const [aiInsights, setAiInsights] = useState(null);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState(null);
+  const [aiLang, setAiLang] = useState('en');
+  const [creatingReminders, setCreatingReminders] = useState(false);
+
+  // Persist AI language preference; default remains English
+  useEffect(() => {
+    const saved = localStorage.getItem('aiLang');
+    if (saved) setAiLang(saved);
+  }, []);
+  useEffect(() => {
+    localStorage.setItem('aiLang', aiLang);
+  }, [aiLang]);
 
   // Upload form state
   const [uploadForm, setUploadForm] = useState({
@@ -118,6 +132,23 @@ const MedicalRecords = () => {
         }
       });
 
+      // Trigger AI analysis right after successful upload
+      try {
+        const aiForm = new FormData();
+        aiForm.append('file', uploadForm.file);
+        const aiRes = await axios.post('/api/ai/analyze', aiForm, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        setAnalysisResult(aiRes.data);
+        setShowAnalysisModal(true);
+      } catch (aiErr) {
+        console.error('AI analysis error:', aiErr);
+        toast.warn(aiErr.response?.data?.message || 'AI analysis unavailable for this file.');
+      }
+
       toast.success('Medical record uploaded successfully!');
       setShowUploadModal(false);
       setUploadForm({
@@ -125,7 +156,9 @@ const MedicalRecords = () => {
         category: 'Lab Results',
         date: new Date().toISOString().split('T')[0],
         description: '',
-        file: null
+        file: null,
+        tags: '',
+        priority: 'normal'
       });
       fetchRecords();
     } catch (error) {
@@ -543,6 +576,317 @@ const MedicalRecords = () => {
           </div>
         )}
 
+        {/* AI Analysis Summary Modal */}
+        {showAnalysisModal && analysisResult && (
+          <div className="modal-overlay" onClick={() => setShowAnalysisModal(false)}>
+            <div className="modal-content ai-insights-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header" style={{ alignItems: 'center', gap: '0.75rem' }}>
+                <h2>🧠 {t(aiLang, 'AI Health Summary')}</h2>
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <label htmlFor="ai-lang" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>🌐</label>
+                  <select id="ai-lang" value={aiLang} onChange={(e) => setAiLang(e.target.value)} className="filter-select" style={{ padding: '0.25rem 0.5rem' }}>
+                    {LANGS.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+                  </select>
+                </div>
+                <button className="close-btn" onClick={() => setShowAnalysisModal(false)}>×</button>
+              </div>
+              <div className="insights-content">
+                <div className="insight-cards">
+                  <div className="insight-card">
+                    <div className="insight-icon">📄</div>
+                    <div className="insight-value" style={{ fontSize: '1.1rem' }}>{analysisResult.fileType?.toUpperCase()}</div>
+                    <div className="insight-label">{t(aiLang, 'File Type')}</div>
+                  </div>
+                  <div className="insight-card">
+                    <div className="insight-icon">❤️</div>
+                    <div className="insight-value">{Object.keys(analysisResult.summary?.keyVitals || {}).length}</div>
+                    <div className="insight-label">{t(aiLang, 'Vitals Detected')}</div>
+                  </div>
+                  <div className="insight-card">
+                    <div className="insight-icon">🩺</div>
+                    <div className="insight-value">{(analysisResult.summary?.possibleConditions || []).length}</div>
+                    <div className="insight-label">{t(aiLang, 'Possible Conditions')}</div>
+                  </div>
+                  <div className="insight-card">
+                    <div className="insight-icon">⚠️</div>
+                    <div className="insight-value">{(analysisResult.summary?.redFlags || []).length}</div>
+                    <div className="insight-label">{t(aiLang, 'Red Flags')}</div>
+                  </div>
+                </div>
+
+                <div className="recommendations" style={{ marginBottom: '1rem' }}>
+                  <h3>{t(aiLang, 'Key Vitals')}</h3>
+                  {Object.keys(analysisResult.summary?.keyVitals || {}).length === 0 ? (
+                    <p className="text-muted">{t(aiLang, 'None detected.')}</p>
+                  ) : (
+                    <ul>
+                      {Object.entries(analysisResult.summary.keyVitals).map(([k, v]) => (
+                        <li key={k}><strong>{k}:</strong> {v}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="recommendations" style={{ marginBottom: '1rem' }}>
+                  <h3>{t(aiLang, 'Possible Conditions')}</h3>
+                  {(analysisResult.summary?.possibleConditions || []).length === 0 ? (
+                    <p className="text-muted">{t(aiLang, 'None detected.')}</p>
+                  ) : (
+                    <ul>
+                      {analysisResult.summary.possibleConditions.map((c, idx) => (
+                        <li key={idx}>{c}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="recommendations" style={{ marginBottom: '1rem' }}>
+                  <h3>{t(aiLang, 'Red Flags')}</h3>
+                  {(analysisResult.summary?.redFlags || []).length === 0 ? (
+                    <p className="text-muted">{t(aiLang, 'None detected.')}</p>
+                  ) : (
+                    <ul>
+                      {analysisResult.summary.redFlags.map((c, idx) => (
+                        <li key={idx}>⚠️ {tx(aiLang, c)}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="recommendations">
+                  <h3>{t(aiLang, 'Suggestions')}</h3>
+                  <ul>
+                    {(analysisResult.summary?.suggestions || []).map((s, idx) => (
+                      <li key={idx}>{tx(aiLang, s)}</li>
+                    ))}
+                  </ul>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                    {t(aiLang, 'Disclaimer: This is an automated summary to help you understand your document. It is not medical advice.')}
+                  </p>
+                </div>
+
+                {analysisResult.prescription && analysisResult.prescription.medications && analysisResult.prescription.medications.length > 0 && (
+                  <div className="recommendations" style={{ marginTop: '1rem' }}>
+                    <h3>{t(aiLang, 'Prescription Summary')}</h3>
+                    {analysisResult.prescription.header?.date && (
+                      <p style={{ margin: '0 0 0.5rem 0' }}>{t(aiLang, 'Date')}: {analysisResult.prescription.header.date}</p>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem' }}>
+                      {analysisResult.prescription.medications.map((m, idx) => (
+                        <div key={idx} style={{ background: 'var(--background-color)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.75rem' }}>
+                          <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>{m.name} {m.strength ? `• ${m.strength}` : ''}</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                            {m.form && <span>{t(aiLang, 'Form')}: {m.form}</span>}
+                            {m.frequency && <span>• {m.frequency}</span>}
+                            {m.duration && <span>• {m.duration}</span>}
+                          </div>
+                          {m.notes && m.notes.length > 0 && (
+                            <ul style={{ margin: '0.5rem 0 0 1rem' }}>
+                              {m.notes.map((n, i) => <li key={i}>{tx(aiLang, n)}</li>)}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {analysisResult.prescription.instructions && analysisResult.prescription.instructions.length > 0 && (
+                      <div style={{ marginTop: '0.75rem' }}>
+                        <h4 style={{ margin: 0 }}>{t(aiLang, 'Additional Instructions')}</h4>
+                        <ul style={{ margin: '0.5rem 0 0 1rem' }}>
+                          {analysisResult.prescription.instructions.map((n, i) => <li key={i}>{tx(aiLang, n)}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {analysisResult.lifestylePlan && (
+                  <div className="recommendations" style={{ marginTop: '1rem' }}>
+                    <h3>{t(aiLang, 'Personalized Lifestyle Plan')}</h3>
+                    <div style={{ display: 'grid', gap: '0.75rem' }}>
+                      <div style={{ background: 'var(--background-color)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.75rem' }}>
+                        <strong>{t(aiLang, 'Sleep')}</strong>
+                        <div style={{ color: 'var(--text-secondary)' }}>
+                          {t(aiLang, 'Target')}: {analysisResult.lifestylePlan.sleep?.targetHours} • {analysisResult.lifestylePlan.sleep?.schedule}
+                          {analysisResult.lifestylePlan.sleep?.notes && (
+                            <div style={{ marginTop: '0.25rem' }}>{analysisResult.lifestylePlan.sleep.notes}</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'var(--background-color)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.75rem' }}>
+                        <strong>{t(aiLang, 'Diet')}</strong>
+                        <div style={{ marginTop: '0.25rem' }}>
+                          {analysisResult.lifestylePlan.diet?.focus?.length > 0 && (
+                            <>
+                              <div style={{ fontWeight: 600 }}>{t(aiLang, 'Focus')}</div>
+                              <ul style={{ margin: '0.25rem 0 0 1rem' }}>
+                                {analysisResult.lifestylePlan.diet.focus.map((s, i) => <li key={i}>{tx(aiLang, s)}</li>)}
+                              </ul>
+                            </>
+                          )}
+                          {analysisResult.lifestylePlan.diet?.avoid?.length > 0 && (
+                            <>
+                              <div style={{ fontWeight: 600, marginTop: '0.5rem' }}>{t(aiLang, 'Avoid')}</div>
+                              <ul style={{ margin: '0.25rem 0 0 1rem' }}>
+                                {analysisResult.lifestylePlan.diet.avoid.map((s, i) => <li key={i}>{tx(aiLang, s)}</li>)}
+                              </ul>
+                            </>
+                          )}
+                          {analysisResult.lifestylePlan.diet?.tips?.length > 0 && (
+                            <>
+                              <div style={{ fontWeight: 600, marginTop: '0.5rem' }}>{t(aiLang, 'Tips')}</div>
+                              <ul style={{ margin: '0.25rem 0 0 1rem' }}>
+                                {analysisResult.lifestylePlan.diet.tips.map((s, i) => <li key={i}>{tx(aiLang, s)}</li>)}
+                              </ul>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'var(--background-color)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.75rem' }}>
+                        <strong>{t(aiLang, 'Hydration')}</strong>
+                        <div style={{ color: 'var(--text-secondary)' }}>
+                          {t(aiLang, 'Target')}: {analysisResult.lifestylePlan.hydration?.targetLiters}
+                          {analysisResult.lifestylePlan.hydration?.tips?.length > 0 && (
+                            <ul style={{ margin: '0.25rem 0 0 1rem' }}>
+                              {analysisResult.lifestylePlan.hydration.tips.map((s, i) => <li key={i}>{tx(aiLang, s)}</li>)}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'var(--background-color)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.75rem' }}>
+                        <strong>{t(aiLang, 'Activity')}</strong>
+                        <div style={{ color: 'var(--text-secondary)' }}>
+                          {t(aiLang, 'Goal')}: {analysisResult.lifestylePlan.activity?.targetMinutesPerWeek} min/week
+                        </div>
+                        {analysisResult.lifestylePlan.activity?.types?.length > 0 && (
+                          <ul style={{ margin: '0.25rem 0 0 1rem' }}>
+                            {analysisResult.lifestylePlan.activity.types.map((s, i) => <li key={i}>{tx(aiLang, s)}</li>)}
+                          </ul>
+                        )}
+                        {analysisResult.lifestylePlan.activity?.cautions?.length > 0 && (
+                          <div style={{ marginTop: '0.5rem' }}>
+                            <span style={{ fontWeight: 600 }}>{t(aiLang, 'Cautions')}</span>
+                            <ul style={{ margin: '0.25rem 0 0 1rem' }}>
+                              {analysisResult.lifestylePlan.activity.cautions.map((s, i) => <li key={i}>{tx(aiLang, s)}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ background: 'var(--background-color)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.75rem' }}>
+                        <strong>{t(aiLang, 'Monitoring')}</strong>
+                        {analysisResult.lifestylePlan.monitoring?.checks?.length > 0 && (
+                          <ul style={{ margin: '0.25rem 0 0 1rem' }}>
+                            {analysisResult.lifestylePlan.monitoring.checks.map((s, i) => <li key={i}>{tx(aiLang, s)}</li>)}
+                          </ul>
+                        )}
+                      </div>
+
+                      <div style={{ background: 'var(--background-color)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.75rem' }}>
+                        <strong>{t(aiLang, 'Reminders')}</strong>
+                        {analysisResult.lifestylePlan.reminders?.meds?.length > 0 && (
+                          <ul style={{ margin: '0.25rem 0 0 1rem' }}>
+                            {analysisResult.lifestylePlan.reminders.meds.map((s, i) => <li key={i}>{tx(aiLang, s)}</li>)}
+                          </ul>
+                        )}
+                        {analysisResult.lifestylePlan.reminders?.general?.length > 0 && (
+                          <ul style={{ margin: '0.25rem 0 0 1rem' }}>
+                            {analysisResult.lifestylePlan.reminders.general.map((s, i) => <li key={i}>{tx(aiLang, s)}</li>)}
+                          </ul>
+                        )}
+                      </div>
+
+                      {analysisResult.lifestylePlan.redFlags?.length > 0 && (
+                        <div style={{ background: 'var(--background-color)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.75rem' }}>
+                          <strong>Red Flags</strong>
+                          <ul style={{ margin: '0.25rem 0 0 1rem' }}>
+                            {analysisResult.lifestylePlan.redFlags.map((t, i) => <li key={i}>⚠️ {t}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {analysisResult?.prescription?.medications?.length > 0 && (
+                  <div className="modal-actions" style={{ justifyContent: 'flex-start', marginTop: '0.5rem' }}>
+                    <button
+                      className="btn btn-primary"
+                      disabled={creatingReminders}
+                      onClick={async () => {
+                        try {
+                          setCreatingReminders(true);
+                          const meds = analysisResult.prescription.medications;
+                          const token = localStorage.getItem('token');
+
+                          // map frequency to default times
+                          const freqToTimes = (freqRaw) => {
+                            const f = (freqRaw || '').toLowerCase();
+                            if (/(\b1-1-1\b|\btid\b|three)/.test(f)) return ['08:00', '14:00', '20:00'];
+                            if (/(\b1-0-1\b)/.test(f)) return ['08:00', '20:00'];
+                            if (/(\bod\b|once|daily)/.test(f)) return ['08:00'];
+                            if (/(\bbd\b|twice)/.test(f)) return ['08:00', '20:00'];
+                            if (/(\bqid\b|four)/.test(f)) return ['08:00', '12:00', '16:00', '20:00'];
+                            if (/(\bhs\b|bedtime)/.test(f)) return ['22:00'];
+                            return ['08:00'];
+                          };
+
+                          const todayISO = new Date().toISOString().slice(0,10);
+                          let success = 0, fail = 0;
+                          for (const m of meds) {
+                            // Skip SOS-only meds by default
+                            if (/\bsos\b/i.test(m.frequency || '')) continue;
+                            const body = {
+                              medicineName: m.name,
+                              dosage: m.strength || '',
+                              frequency: m.frequency || 'Once Daily',
+                              startDate: todayISO,
+                              // let server default endDate +7 days; can include if needed
+                              times: freqToTimes(m.frequency),
+                              notes: (m.notes || []).join('; ')
+                            };
+                            try {
+                              await axios.post('/api/reminders', body, { headers: { Authorization: `Bearer ${token}` } });
+                              success++;
+                            } catch(e) { fail++; }
+                          }
+                          if (success > 0) toast.success(`${success} reminder(s) created`);
+                          if (fail > 0) toast.warn(`${fail} reminder(s) could not be created`);
+                        } finally {
+                          setCreatingReminders(false);
+                        }
+                      }}
+                    >
+                      {creatingReminders ? 'Creating reminders…' : 'Create medication reminders'}
+                    </button>
+                  </div>
+                )}
+
+                {analysisResult.fileType === 'dicom' && (
+                  <div className="recommendations" style={{ marginTop: '1rem' }}>
+                    <h3>DICOM Viewer</h3>
+                    <p>We detected a DICOM file. A built-in viewer for 2D/3D exploration will appear here in the next step.</p>
+                  </div>
+                )}
+
+                {analysisResult.extractedText && analysisResult.fileType !== 'dicom' && (
+                  <div className="recommendations" style={{ marginTop: '1rem' }}>
+                    <h3>Extracted Text (Preview)</h3>
+                    <div style={{ maxHeight: '200px', overflowY: 'auto', background: 'var(--background-color)', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
+                      <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{analysisResult.extractedText.slice(0, 4000)}</pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={() => setShowAnalysisModal(false)}>{t(aiLang, 'Close')}</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Quick Select Bar */}
         {filteredRecords.length > 0 && (
           <div className="quick-select-bar">
@@ -755,7 +1099,7 @@ const MedicalRecords = () => {
                       type="file"
                       id="file"
                       onChange={handleFileChange}
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif"
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.dcm"
                       required
                     />
                     {uploadForm.file && (
@@ -765,7 +1109,7 @@ const MedicalRecords = () => {
                       </div>
                     )}
                   </div>
-                  <small>Accepted formats: PDF, DOC, DOCX, JPG, PNG, GIF (Max 10MB)</small>
+                  <small>Accepted formats: PDF, DOC, DOCX, JPG, PNG, GIF, DICOM (.dcm) (Max 10MB)</small>
                 </div>
 
                 <div className="modal-actions">

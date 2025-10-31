@@ -261,8 +261,10 @@ router.delete('/:id', protect, async (req, res) => {
       });
     }
 
-    // Delete the file from filesystem
-    const filePath = path.join(__dirname, '..', record.fileUrl);
+  // Delete the file from filesystem
+  // record.fileUrl is stored like '/uploads/filename'; ensure we don't join with a leading slash (which would resolve to drive root on Windows)
+  const relativeUrl = (record.fileUrl || '').replace(/^\/+/, '');
+  const filePath = path.join(__dirname, '..', relativeUrl);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }

@@ -21,6 +21,7 @@ const medicalRecordRoutes = require('./routes/medicalRecord');
 const reminderRoutes = require('./routes/reminder');
 const healthTipRoutes = require('./routes/healthTip');
 const chatbotRoutes = require('./routes/chatbot');
+const aiRoutes = require('./routes/ai');
 const demoMode = require('./middleware/demoMode');
 
 // Create Express app
@@ -34,11 +35,12 @@ app.use(helmet());
 app.use(helmet.contentSecurityPolicy({
   directives: {
     defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", "'unsafe-inline'"],
+    scriptSrc: ["'self'", "'unsafe-inline'", 'https://www.noupe.com'],
     styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
     fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-    imgSrc: ["'self'", 'data:', 'blob:'],
-    connectSrc: ["'self'"]
+    imgSrc: ["'self'", 'data:', 'blob:', 'https://www.noupe.com'],
+    connectSrc: ["'self'", 'https://www.noupe.com'],
+    frameSrc: ["'self'", 'https://www.noupe.com']
   }
 }));
 
@@ -75,6 +77,7 @@ app.use('/api/medical-records', medicalRecordRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/health-tips', healthTipRoutes);
 app.use('/api/chatbot', chatbotRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {

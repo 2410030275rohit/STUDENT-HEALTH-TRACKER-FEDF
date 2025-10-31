@@ -1,6 +1,13 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { protect } = require('../middleware/auth');
+let OpenAI;
+try {
+  // Lazy require to avoid crashing if dependency isn't installed in some environments
+  OpenAI = require('openai');
+} catch (_) {
+  OpenAI = null;
+}
 
 const router = express.Router();
 
@@ -110,8 +117,11 @@ const getResponse = (category) => {
 // @access  Private
 router.post('/chat', [
   protect,
-  body('message').notEmpty().withMessage('Message is required').isLength({ max: 500 }).withMessage('Message too long')
+  body('message').notEmpty().withMessage('Message is required').isLength({ max: 5000 }).withMessage('Message too long')
 ], async (req, res) => {
+  // Common disclaimer
+  const disclaimer = "⚠️ This is general health information only and should not replace professional medical advice. Always consult with your healthcare provider for medical concerns.";
+
   try {
     // Check for validation errors
     const errors = validationResult(req);
@@ -123,21 +133,72 @@ router.post('/chat', [
       });
     }
 
-    const { message } = req.body;
-    
-    // Categorize the message and get appropriate response
+    const { message, history } = req.body;
+
+    const hasOpenAI = !!(process.env.OPENAI_API_KEY);
+
+    // If OpenAI is configured, use it. Otherwise, fallback to the rule-based responder.
+    if (hasOpenAI && OpenAI) {
+      try {
+        const client = new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
+          baseURL: process.env.OPENAI_BASE_URL || undefined
+        });
+
+        const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+
+        // Build chat messages with a safety-oriented system prompt
+        const systemPrompt = [
+          "You are a helpful health information assistant for a medical records app.",
+          "Provide general health education only. Do NOT diagnose or prescribe.",
+          "When asked about emergencies, advise seeking immediate medical help.",
+          "Keep answers concise, evidence-informed, and accessible."
+        ].join(' ');
+
+        const chatMessages = [
+          { role: 'system', content: systemPrompt },
+          ...(Array.isArray(history) ? history.filter(m => m && m.role && m.content).slice(-12) : []),
+          { role: 'user', content: message }
+        ];
+
+        // Use Chat Completions for broad compatibility with OpenAI-compatible endpoints
+        const completion = await client.chat.completions.create({
+          model,
+          messages: chatMessages,
+          temperature: 0.3,
+          max_tokens: 400
+        });
+
+        const botResponse = completion.choices?.[0]?.message?.content?.trim() || 'Sorry, I could not generate a response.';
+
+        return res.status(200).json({
+          success: true,
+          data: {
+            userMessage: message,
+            botResponse,
+            disclaimer,
+            provider: 'openai',
+            model,
+            timestamp: new Date()
+          }
+        });
+      } catch (llmErr) {
+        console.error('LLM error:', llmErr?.response?.data || llmErr?.message || llmErr);
+        // fall through to rule-based fallback
+      }
+    }
+
+    // Fallback: categorize the message and get appropriate response
     const category = categorizeMessage(message);
     const response = getResponse(category);
-    
-    // Add disclaimer for medical advice
-    const disclaimer = "⚠️ This is general health information only and should not replace professional medical advice. Always consult with your healthcare provider for medical concerns.";
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: {
         userMessage: message,
         botResponse: response,
         disclaimer: category !== 'greetings' ? disclaimer : null,
+        provider: 'builtin',
         timestamp: new Date()
       }
     });
@@ -180,7 +241,12 @@ router.get('/capabilities', protect, (req, res) => {
       data: {
         capabilities,
         topics,
-        disclaimer: "This chatbot provides general health information only and should not replace professional medical advice."
+        disclaimer: "This chatbot provides general health information only and should not replace professional medical advice.",
+        llm: {
+          provider: process.env.OPENAI_API_KEY ? 'openai' : 'builtin',
+          model: process.env.LLM_MODEL || null,
+          baseURL: process.env.OPENAI_BASE_URL || null
+        }
       }
     });
   } catch (error) {

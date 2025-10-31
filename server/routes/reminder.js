@@ -5,17 +5,73 @@ const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Helper: normalize incoming body from client shape to server shape
+function normalizeReminderBody(req, res, next) {
+  try {
+    const b = req.body || {};
+    // Title fallback
+    if (!b.title && (b.medicineName || b.dosage)) {
+      const parts = [b.medicineName, b.dosage].filter(Boolean);
+      if (parts.length) req.body.title = parts.join(' ');
+    }
+    // Notes -> instructions
+    if (b.notes && !b.instructions) {
+      req.body.instructions = b.notes;
+    }
+    // times (['HH:mm']) -> reminderTimes (Date[] anchored to startDate or today)
+    if (!b.reminderTimes && Array.isArray(b.times)) {
+      const base = b.startDate ? new Date(b.startDate) : new Date();
+      const reminderTimes = b.times.map((t) => {
+        const [hh, mm] = (t || '08:00').split(':').map(Number);
+        const d = new Date(base);
+        d.setHours(Number.isFinite(hh) ? hh : 8, Number.isFinite(mm) ? mm : 0, 0, 0);
+        return d.toISOString();
+      });
+      req.body.reminderTimes = reminderTimes;
+    }
+  } catch (_) {
+    // ignore normalization errors; validation will catch
+  }
+  return next();
+}
+
+// Helper: map DB reminder to client-friendly shape
+function mapReminderToClient(r) {
+  const times = Array.isArray(r.reminderTimes)
+    ? r.reminderTimes.map((d) => {
+        const dt = new Date(d);
+        const hh = String(dt.getHours()).padStart(2, '0');
+        const mm = String(dt.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+      })
+    : [];
+  return {
+    _id: r._id,
+    medicineName: r.medicineDetails?.name,
+    dosage: r.medicineDetails?.dosage,
+    frequency: r.medicineDetails?.frequency,
+    notes: r.medicineDetails?.instructions,
+    times,
+    isActive: r.active,
+    startDate: r.startDate,
+    endDate: r.endDate,
+    createdAt: r.createdAt,
+  };
+}
+
 // @desc    Create medicine reminder
 // @route   POST /api/reminders
 // @access  Private
 router.post('/', [
   protect,
+  normalizeReminderBody,
   body('title').notEmpty().withMessage('Title is required'),
   body('medicineName').notEmpty().withMessage('Medicine name is required'),
   body('dosage').notEmpty().withMessage('Dosage is required'),
   body('frequency').notEmpty().withMessage('Frequency is required'),
   body('startDate').isISO8601().withMessage('Valid start date is required'),
-  body('endDate').isISO8601().withMessage('Valid end date is required'),
+  body('endDate').optional().isISO8601().withMessage('Valid end date is required'),
+  // Accept either reminderTimes or times -> normalized earlier
   body('reminderTimes').isArray({ min: 1 }).withMessage('At least one reminder time is required')
 ], async (req, res) => {
   try {
@@ -34,8 +90,8 @@ router.post('/', [
       medicineName,
       dosage,
       frequency,
-      instructions,
-      reminderTimes,
+  instructions,
+  reminderTimes,
       startDate,
       endDate,
       expiryDate,
@@ -44,8 +100,8 @@ router.post('/', [
     } = req.body;
 
     // Validate dates
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+  const start = new Date(startDate);
+  const end = endDate ? new Date(endDate) : new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
     
     if (start >= end) {
       return res.status(400).json({
@@ -71,10 +127,8 @@ router.post('/', [
       notificationType: notificationType || 'email'
     });
 
-    res.status(201).json({
-      success: true,
-      data: reminder
-    });
+    // Respond in client-friendly shape
+    res.status(201).json({ success: true, data: mapReminderToClient(reminder) });
   } catch (error) {
     console.error(error);
     res.status(500).json({
@@ -110,11 +164,8 @@ router.get('/', protect, async (req, res) => {
       .populate('relatedPrescription', 'title recordType')
       .sort({ startDate: 1 });
 
-    res.status(200).json({
-      success: true,
-      count: reminders.length,
-      data: reminders
-    });
+    const mapped = reminders.map(mapReminderToClient);
+    res.status(200).json({ success: true, count: mapped.length, data: mapped });
   } catch (error) {
     console.error(error);
     res.status(500).json({
@@ -147,10 +198,7 @@ router.get('/:id', protect, async (req, res) => {
       });
     }
 
-    res.status(200).json({
-      success: true,
-      data: reminder
-    });
+    res.status(200).json({ success: true, data: mapReminderToClient(reminder) });
   } catch (error) {
     console.error(error);
     res.status(500).json({
@@ -198,6 +246,10 @@ router.put('/:id', [
     }
 
     const updateFields = { ...req.body };
+    // Support isActive toggle via PUT as well
+    if (typeof req.body.isActive === 'boolean') {
+      updateFields.active = req.body.isActive;
+    }
     
     // Update medicine details if provided
     if (req.body.medicineName || req.body.dosage || req.body.frequency || req.body.instructions) {
@@ -219,16 +271,47 @@ router.put('/:id', [
       runValidators: true
     });
 
-    res.status(200).json({
-      success: true,
-      data: reminder
-    });
+    res.status(200).json({ success: true, data: mapReminderToClient(reminder) });
   } catch (error) {
     console.error(error);
     res.status(500).json({
       success: false,
       message: 'Server error'
     });
+  }
+});
+
+// @desc    Partial update reminder (supports isActive from client)
+// @route   PATCH /api/reminders/:id
+// @access  Private
+router.patch('/:id', protect, async (req, res) => {
+  try {
+    let reminder = await Reminder.findById(req.params.id);
+    if (!reminder) {
+      return res.status(404).json({ success: false, message: 'Reminder not found' });
+    }
+    if (reminder.user.toString() !== req.user.id) {
+      return res.status(401).json({ success: false, message: 'Not authorized to update this reminder' });
+    }
+    if (typeof req.body.isActive === 'boolean') {
+      reminder.active = req.body.isActive;
+    }
+    // Allow updating notes/instructions and times
+    if (req.body.notes) reminder.medicineDetails.instructions = req.body.notes;
+    if (Array.isArray(req.body.times)) {
+      const base = reminder.startDate || new Date();
+      reminder.reminderTimes = req.body.times.map((t) => {
+        const [hh, mm] = (t || '08:00').split(':').map(Number);
+        const d = new Date(base);
+        d.setHours(Number.isFinite(hh) ? hh : 8, Number.isFinite(mm) ? mm : 0, 0, 0);
+        return d;
+      });
+    }
+    await reminder.save();
+    res.status(200).json({ success: true, data: mapReminderToClient(reminder) });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
@@ -257,10 +340,7 @@ router.put('/:id/toggle', protect, async (req, res) => {
     reminder.active = !reminder.active;
     await reminder.save();
 
-    res.status(200).json({
-      success: true,
-      data: reminder
-    });
+    res.status(200).json({ success: true, data: mapReminderToClient(reminder) });
   } catch (error) {
     console.error(error);
     res.status(500).json({

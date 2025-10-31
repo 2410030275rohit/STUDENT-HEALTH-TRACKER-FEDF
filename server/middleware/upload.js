@@ -22,15 +22,15 @@ const storage = multer.diskStorage({
 
 // File filter for allowed file types
 const fileFilter = (req, file, cb) => {
-  // Allowed file types for medical records
-  const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
+  // Allowed file types for medical records (including DICOM .dcm)
+  const ext = path.extname(file.originalname).toLowerCase();
+  const allowedExt = /(\.jpeg|\.jpg|\.png|\.gif|\.pdf|\.doc|\.docx|\.dcm)$/i.test(ext);
+  const allowedMime = /(image\/jpeg|image\/jpg|image\/png|image\/gif|application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document|application\/dicom|application\/dicom\+json|application\/octet-stream)/i.test(file.mimetype);
 
-  if (mimetype && extname) {
+  if (allowedExt && (allowedMime || ext === '.dcm')) {
     return cb(null, true);
   } else {
-    cb(new Error('Only images and documents (PDF, DOC, DOCX) are allowed!'));
+    cb(new Error('Only images, documents (PDF, DOC, DOCX), and DICOM (.dcm) files are allowed!'));
   }
 };
 
@@ -60,7 +60,7 @@ const handleMulterError = (err, req, res, next) => {
     }
   }
   
-  if (err.message === 'Only images and documents (PDF, DOC, DOCX) are allowed!') {
+  if (err.message === 'Only images, documents (PDF, DOC, DOCX), and DICOM (.dcm) files are allowed!') {
     return res.status(400).json({
       success: false,
       message: err.message

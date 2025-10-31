@@ -41,6 +41,27 @@
 8. **Secure Authentication** - Login/register with JWT security
 9. **File Management** - Secure file upload and storage
 
+## 🤖 Enable ChatGPT for the Chatbot (Optional)
+
+By default, the chatbot uses built‑in general health replies. To link it with ChatGPT (or any OpenAI‑compatible LLM URL):
+
+1) Create a `.env` file inside the `server/` folder (same level as `index.js`) with:
+
+```
+OPENAI_API_KEY=your_openai_api_key_here
+# If you're using a custom ChatGPT/OpenAI‑compatible endpoint (e.g., Azure OpenAI or a proxy), set the base URL:
+OPENAI_BASE_URL=https://api.openai.com/v1
+# Optionally choose a model
+LLM_MODEL=gpt-4o-mini
+```
+
+2) Restart the backend (stop and start the website again). When configured, the chatbot will call the LLM; if not, it will fall back to the built‑in responses.
+
+Notes:
+- Your API key stays on the server; the frontend never sends it.
+- If `OPENAI_BASE_URL` is omitted, it defaults to the standard OpenAI API.
+- If no API key is set, the chatbot still works with built‑in guidance.
+
 ## 🔧 Troubleshooting
 
 - If website doesn't load, make sure both MongoDB and website are running
