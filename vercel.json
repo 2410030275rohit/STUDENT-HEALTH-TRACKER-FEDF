@@ -3,6 +3,9 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 30
+    },
+    "api/health.js": {
+      "maxDuration": 10
     }
   },
   "framework": "create-react-app",
@@ -11,7 +14,7 @@
   "outputDirectory": "client/build",
   "routes": [
     { "handle": "filesystem" },
-    { "src": "/health", "dest": "/api/index.js" },
+    { "src": "/health", "dest": "/api/health.js" },
     { "src": "/uploads/(.*)", "dest": "/api/index.js" },
     { "src": "/api/(.*)", "dest": "/api/index.js" }
   ]
