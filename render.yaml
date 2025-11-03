@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: smart-health-api
+    env: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+
+  - type: static
+    name: smart-health-web
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    autoDeploy: true
+    envVars:
+      - key: REACT_APP_API_BASE_URL
+        fromService:
+          type: web
+          name: smart-health-api
+          property: url
