@@ -12,25 +12,38 @@ export const useTheme = () => {
 
 export const ThemeProvider = ({ children }) => {
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    // Check localStorage for saved theme preference
-    const savedTheme = localStorage.getItem('darkMode');
-    if (savedTheme !== null) {
-      return JSON.parse(savedTheme);
+    try {
+      // Check localStorage for saved theme preference
+      const savedTheme = localStorage.getItem('darkMode');
+      if (savedTheme !== null) {
+        return JSON.parse(savedTheme);
+      }
+    } catch (_) {
+      // ignore and fallback
     }
-    // Default to system preference
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    try {
+      // Default to system preference (guarded)
+      return typeof window !== 'undefined' &&
+        window.matchMedia &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } catch (_) {
+      return false;
+    }
   });
 
   useEffect(() => {
-    // Apply theme to document
-    if (isDarkMode) {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
+    try {
+      // Apply theme to document
+      if (isDarkMode) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+      // Save preference to localStorage
+      localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
+    } catch (_) {
+      // ignore storage errors
     }
-    
-    // Save preference to localStorage
-    localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
   }, [isDarkMode]);
 
   const toggleTheme = () => {

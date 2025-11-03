@@ -1,17 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 
 // A modern, attractive splash screen shown while the app initializes/auth checks.
-// Includes a pulsing medical cross, heartbeat line animation, and brand text.
+// Important: This component stays visible as long as the parent renders it.
+// We do not auto-hide to avoid a brief blank screen if initialization takes longer.
 export default function SplashScreen() {
-  const [show, setShow] = useState(true);
-
-  // Ensure a minimal display time to avoid flicker on fast loads
-  useEffect(() => {
-    const t = setTimeout(() => setShow(false), 800);
-    return () => clearTimeout(t);
-  }, []);
-
-  if (!show) return null;
 
   return (
     <div className="splash">
