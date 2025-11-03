@@ -18,7 +18,9 @@ import Chatbot from './pages/Chatbot';
 import Profile from './pages/Profile';
 import EmergencyInfo from './pages/EmergencyInfo';
 import './App.css';
-import ExternalEmbed from './components/ExternalEmbed';
+import ErrorBoundary from './components/ErrorBoundary';
+// Temporarily disable the external embed to avoid third-party script interference during first paint
+// import ExternalEmbed from './components/ExternalEmbed';
 import SplashScreen from './components/SplashScreen';
 
 function MainLayout() {
@@ -95,7 +97,9 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <MainLayout />
+        <ErrorBoundary>
+          <MainLayout />
+        </ErrorBoundary>
       </AuthProvider>
     </ThemeProvider>
   );
