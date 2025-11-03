@@ -36,6 +36,13 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({ storage, fileFilter, limits: { fileSize: 20 * 1024 * 1024 } });
 
+// In development, allow analyze without auth to simplify local E2E tests.
+// In production, always enforce auth.
+const maybeProtect = (req, res, next) => {
+  if (process.env.NODE_ENV === 'development') return next();
+  return protect(req, res, next);
+};
+
 // Simple clinical heuristics to create a health summary from extracted text
 function buildHealthSummary(text = '') {
   const summary = {
@@ -276,7 +283,7 @@ function parsePrescription(raw = '') {
 }
 
 // POST /api/ai/analyze
-router.post('/analyze', protect, upload.single('file'), async (req, res) => {
+router.post('/analyze', maybeProtect, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
 
