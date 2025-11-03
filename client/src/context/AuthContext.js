@@ -28,23 +28,37 @@ export const AuthProvider = ({ children }) => {
 
   // Check if user is logged in on app load
   useEffect(() => {
+    let cancelled = false;
     const checkAuth = async () => {
-      if (token) {
-        try {
-          const response = await axios.get('/api/auth/me');
-          setUser(response.data.data);
-        } catch (error) {
-          console.error('Auth check failed:', error);
-          // Remove invalid token
-          localStorage.removeItem('token');
+      try {
+        if (token) {
+          // Short timeout to avoid blank screen during cold starts
+          const response = await axios.get('/api/auth/me', { timeout: 3500 });
+          if (!cancelled) setUser(response.data.data);
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error?.message || error);
+        // Remove invalid/stale token on any failure
+        localStorage.removeItem('token');
+        if (!cancelled) {
           setToken(null);
           delete axios.defaults.headers.common['Authorization'];
         }
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
+    // Failsafe: never keep the splash forever
+    const failSafe = setTimeout(() => {
+      if (!cancelled) setIsLoading(false);
+    }, 4000);
+
     checkAuth();
+    return () => {
+      cancelled = true;
+      clearTimeout(failSafe);
+    };
   }, [token]);
 
   const login = async (email, password) => {
