@@ -15,7 +15,9 @@ const Chatbot = () => {
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -169,6 +171,158 @@ const Chatbot = () => {
     }
   };
 
+  const formatPrescriptionSummary = (data, fileName) => {
+    try {
+      const { prescription = {}, summary = {}, lifestylePlan = {} } = data || {};
+      const meds = (prescription.medications || []).slice(0, 8);
+
+      const headerBits = [];
+      if (prescription.header?.patient) headerBits.push(`Patient: ${prescription.header.patient}`);
+      if (prescription.header?.age) headerBits.push(`Age: ${prescription.header.age}`);
+      if (prescription.header?.sex) headerBits.push(`Sex: ${prescription.header.sex}`);
+      if (prescription.header?.date) headerBits.push(`Date: ${prescription.header.date}`);
+
+      const vitalsBits = [];
+      if (prescription.vitals?.bp) vitalsBits.push(`BP ${prescription.vitals.bp}`);
+      if (prescription.vitals?.pulse) vitalsBits.push(`Pulse ${prescription.vitals.pulse}`);
+      if (prescription.vitals?.spo2) vitalsBits.push(`SpO2 ${prescription.vitals.spo2}`);
+      if (prescription.vitals?.temp) vitalsBits.push(`Temp ${prescription.vitals.temp}`);
+
+      let text = `Analyzed ${fileName ? '"' + fileName + '"' : 'document'}\n\n`;
+      if (headerBits.length) text += `Header: ${headerBits.join(' | ')}\n`;
+      if (vitalsBits.length) text += `Vitals: ${vitalsBits.join(' | ')}\n`;
+
+      if (meds.length) {
+        text += `\nPrescription Summary:`;
+        meds.forEach((m, idx) => {
+          const parts = [];
+          if (m.name) parts.push(m.name);
+          if (m.strength) parts.push(m.strength);
+          if (m.frequency) parts.push(m.frequency);
+          if (m.duration) parts.push(m.duration);
+          const line = parts.join(' • ');
+          const notes = (m.notes || []).length ? ` (Notes: ${(m.notes || []).join('; ')})` : '';
+          text += `\n  ${idx + 1}. ${line}${notes}`;
+        });
+      } else {
+        text += `\nNo clear medications detected.`;
+      }
+
+      const instr = prescription.instructions || [];
+      if (instr.length) {
+        text += `\n\nGeneral Instructions:`;
+        instr.forEach((i) => (text += `\n  • ${i}`));
+      }
+
+      // Lifestyle plan details
+      const dietFocus = (lifestylePlan?.diet?.focus || []).slice(0, 6);
+      const dietAvoid = (lifestylePlan?.diet?.avoid || []).slice(0, 6);
+      const dietTips = (lifestylePlan?.diet?.tips || []).slice(0, 3);
+      const sleep = lifestylePlan?.sleep || {};
+      const hydration = lifestylePlan?.hydration || {};
+      const activity = lifestylePlan?.activity || {};
+      const monitoring = lifestylePlan?.monitoring || {};
+      const reminders = lifestylePlan?.reminders || {};
+
+      text += `\n\nLifestyle Guidance:`;
+      if (dietFocus.length || dietAvoid.length || dietTips.length) {
+        text += `\nDiet:`;
+        if (dietFocus.length) text += `\n  • Focus: ${dietFocus.join('; ')}`;
+        if (dietAvoid.length) text += `\n  • Avoid: ${dietAvoid.join('; ')}`;
+        if (dietTips.length) text += `\n  • Tips: ${dietTips.join(' | ')}`;
+      }
+      if (sleep.targetHours || sleep.schedule || sleep.notes) {
+        const sleepBits = [];
+        if (sleep.targetHours) sleepBits.push(`Target ${sleep.targetHours}`);
+        if (sleep.schedule) sleepBits.push(sleep.schedule);
+        if (sleep.notes) sleepBits.push(sleep.notes);
+        text += `\nSleep: ${sleepBits.join(' | ')}`;
+      }
+      if (hydration.targetLiters || (hydration.tips || []).length) {
+        const hTips = (hydration.tips || []).slice(0, 2);
+        text += `\nHydration: ${hydration.targetLiters || '2–3 L/day'}${hTips.length ? ' • ' + hTips.join(' | ') : ''}`;
+      }
+      if (activity.targetMinutesPerWeek || (activity.types || []).length || (activity.cautions || []).length) {
+        const aTypes = (activity.types || []).slice(0, 3);
+        const aCautions = (activity.cautions || []).slice(0, 2);
+        text += `\nActivity: Aim ${activity.targetMinutesPerWeek || 150} min/week`;
+        if (aTypes.length) text += ` • Types: ${aTypes.join(', ')}`;
+        if (aCautions.length) text += ` • Caution: ${aCautions.join('; ')}`;
+      }
+      if ((monitoring.checks || []).length) {
+        const checks = (monitoring.checks || []).slice(0, 4);
+        text += `\nMonitoring: ${checks.join(' | ')}`;
+      }
+      if ((reminders.general || []).length || (reminders.meds || []).length) {
+        const gen = (reminders.general || []).slice(0, 2);
+        const medsR = (reminders.meds || []).slice(0, 2);
+        if (gen.length) text += `\nReminders: ${gen.join(' | ')}`;
+        if (medsR.length) text += `\nMedication reminders: ${medsR.join(' | ')}`;
+      }
+
+      const redFlags = summary.redFlags || [];
+      if (redFlags.length) {
+        text += `\n\n⚠️ Red flags noted: ${redFlags.join('; ')}`;
+      }
+
+      text += `\n\nNote: Always follow your doctor's advice. This summary is AI-generated from the document text.`;
+      return text;
+    } catch {
+      return 'I analyzed the file but could not format the summary.';
+    }
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    // Reset input so the same file can be selected again later
+    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    const allowed = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowed.includes(file.type) && !/\.pdf$|\.jpg$|\.jpeg$|\.png$/i.test(file.name)) {
+      setMessages(prev => [...prev, { id: Date.now(), text: 'Unsupported file type. Please upload a PDF or image (JPG/PNG).', sender: 'bot', timestamp: new Date() }]);
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setMessages(prev => [...prev, { id: Date.now(), text: 'File too large. Please upload a file under 20 MB.', sender: 'bot', timestamp: new Date() }]);
+      return;
+    }
+
+    // Show a user message indicating upload
+    const userMsg = { id: Date.now(), text: `📄 Uploaded: ${file.name}`, sender: 'user', timestamp: new Date() };
+    setMessages(prev => [...prev, userMsg]);
+    setIsTyping(true);
+    setIsAnalyzing(true);
+
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const token = localStorage.getItem('token');
+      const res = await axios.post('/api/ai/analyze', form, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (res?.data?.success) {
+        const summaryText = formatPrescriptionSummary(res.data, file.name);
+        const botMessage = { id: Date.now() + 1, text: summaryText, sender: 'bot', timestamp: new Date() };
+        setMessages(prev => [...prev, botMessage]);
+      } else {
+        const botMessage = { id: Date.now() + 1, text: 'Sorry, I could not analyze that file.', sender: 'bot', timestamp: new Date() };
+        setMessages(prev => [...prev, botMessage]);
+      }
+    } catch (err) {
+      const botMessage = { id: Date.now() + 1, text: `Analysis failed: ${err?.response?.data?.message || err.message}`, sender: 'bot', timestamp: new Date() };
+      setMessages(prev => [...prev, botMessage]);
+    } finally {
+      setIsTyping(false);
+      setIsAnalyzing(false);
+    }
+  };
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -244,6 +398,22 @@ const Chatbot = () => {
           </div>
 
           <div className="chat-input">
+            <input
+              type="file"
+              accept=".pdf,image/*"
+              style={{ display: 'none' }}
+              ref={fileInputRef}
+              onChange={handleFileChange}
+            />
+            <button
+              type="button"
+              className="upload-button"
+              onClick={() => fileInputRef.current && fileInputRef.current.click()}
+              disabled={isTyping || isAnalyzing}
+              title="Upload prescription (PDF/JPG/PNG)"
+            >
+              {isAnalyzing ? 'Analyzing…' : 'Upload'}
+            </button>
             <textarea
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
@@ -448,6 +618,21 @@ const Chatbot = () => {
           cursor: pointer;
           font-weight: 500;
           transition: background-color 0.3s ease;
+        }
+
+        .upload-button {
+          padding: 0.75rem 1rem;
+          background-color: var(--background-color);
+          color: var(--text-color);
+          border: 1px solid var(--border-color);
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-weight: 500;
+          transition: all 0.3s ease;
+        }
+
+        .upload-button:hover:not(:disabled) {
+          background-color: var(--light-bg);
         }
 
         .send-button:hover:not(:disabled) {
