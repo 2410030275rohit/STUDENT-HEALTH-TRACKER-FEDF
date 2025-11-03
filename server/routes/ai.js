@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const pdfParse = require('pdf-parse');
 const Tesseract = require('tesseract.js');
 const sharp = require('sharp');
@@ -9,9 +10,11 @@ const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Local upload config allowing images, pdf, and dicom (.dcm)
-const uploadDir = path.join(__dirname, '..', 'uploads', 'analysis');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+// Local/serverless upload config allowing images, pdf, and dicom (.dcm)
+const isVercel = !!process.env.VERCEL;
+const uploadBase = isVercel ? os.tmpdir() : path.join(__dirname, '..', 'uploads');
+const uploadDir = path.join(uploadBase, 'analysis');
+try { if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true }); } catch (_) {}
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
