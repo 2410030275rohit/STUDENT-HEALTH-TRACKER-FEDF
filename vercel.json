@@ -2,8 +2,8 @@
   "version": 2,
   "functions": {
     "api/index.js": {
-      "runtime": "nodejs18.x",
-      "maxDuration": 60
+      "runtime": "nodejs20.x",
+      "maxDuration": 30
     }
   },
   "framework": "create-react-app",
