@@ -3,9 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const pdfParse = require('pdf-parse');
-const Tesseract = require('tesseract.js');
-const sharp = require('sharp');
+// Lazy-load heavy modules inside the handler to reduce cold start on serverless
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
@@ -299,6 +297,7 @@ router.post('/analyze', maybeProtect, upload.single('file'), async (req, res) =>
 
     if (mime === 'application/pdf' || ext === '.pdf') {
       fileType = 'pdf';
+      const pdfParse = require('pdf-parse');
       const data = await pdfParse(fs.readFileSync(filePath));
       extractedText = data.text || '';
     } else if (mime.startsWith('image/') || ['.jpg', '.jpeg', '.png'].includes(ext)) {
@@ -306,6 +305,7 @@ router.post('/analyze', maybeProtect, upload.single('file'), async (req, res) =>
       // Preprocess to improve OCR
       const preprocessedPath = filePath.replace(/(\.[a-z]+)$/i, '-pre$1');
       try {
+        const sharp = require('sharp');
         await sharp(filePath)
           .grayscale()
           .normalize()
@@ -316,6 +316,7 @@ router.post('/analyze', maybeProtect, upload.single('file'), async (req, res) =>
         // fallback to original
       }
       const ocrTarget = fs.existsSync(preprocessedPath) ? preprocessedPath : filePath;
+      const Tesseract = require('tesseract.js');
       const result = await Tesseract.recognize(ocrTarget, 'eng', {
         logger: () => {},
         tessedit_pageseg_mode: 6,

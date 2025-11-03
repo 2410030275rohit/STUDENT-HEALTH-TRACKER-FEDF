@@ -102,18 +102,22 @@ app.use((err, req, res, next) => {
 });
 
 // Mongo connection (cached)
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/medical-storage';
+const MONGODB_URI = process.env.MONGODB_URI || '';
 let mongoConnection = null;
 
 async function ensureDbConnected() {
   if (mongoConnection) return mongoConnection;
+  // Skip connection if no URI is provided (allow demo mode / serverless health to be fast)
+  if (!MONGODB_URI) return null;
   try {
-    mongoConnection = await mongoose.connect(MONGODB_URI);
+    mongoConnection = await mongoose.connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 3000,
+      connectTimeoutMS: 3000
+    });
     console.log('✅ Connected to MongoDB');
   } catch (err) {
     mongoConnection = null;
-    console.log('⚠️  MongoDB connection failed');
-    console.log('   Install MongoDB or use MongoDB Atlas for full database features');
+    console.log('⚠️  MongoDB connection failed quickly (proceeding in demo mode)');
   }
   return mongoConnection;
 }

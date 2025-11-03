@@ -5,8 +5,11 @@ const { app, ensureDbConnected } = require('../server/app');
 let handler;
 
 module.exports = async (req, res) => {
-  // Ensure DB connection (cached across warm invocations)
-  await ensureDbConnected();
+  // Skip DB connect for health checks and when no URI is set
+  const needsDb = !!process.env.MONGODB_URI && !(req.url === '/health' || req.url.startsWith('/health?'));
+  if (needsDb) {
+    await ensureDbConnected();
+  }
 
   if (!handler) {
     handler = serverless(app);
