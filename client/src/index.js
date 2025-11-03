@@ -4,9 +4,9 @@ import './index.css';
 import App from './App';
 import axios from 'axios';
 
-// Configure axios base URL for production deployments (e.g., Render)
+// Configure axios base URL for hosted deployments
 // If REACT_APP_API_BASE_URL is set, all relative requests will target that server.
-// Example: REACT_APP_API_BASE_URL=https://your-api.onrender.com
+// Example: REACT_APP_API_BASE_URL=https://api.example.com
 const apiBase = process.env.REACT_APP_API_BASE_URL;
 if (apiBase) {
   axios.defaults.baseURL = apiBase;
