@@ -10,16 +10,11 @@
   "installCommand": "npm install && npm install --prefix server && npm install --prefix client",
   "buildCommand": "npm run build --prefix client",
   "outputDirectory": "client/build",
-  "rewrites": [
-    { "source": "/health", "destination": "/api/index.js" },
-    { "source": "/uploads/(.*)", "destination": "/api/index.js" },
-    { "source": "/api/(.*)", "destination": "/api/index.js" },
-    { "source": "/static/(.*)", "destination": "/client/build/static/$1" },
-    { "source": "/assets/(.*)", "destination": "/client/build/assets/$1" },
-    { "source": "/favicon.ico", "destination": "/client/build/favicon.ico" },
-    { "source": "/manifest.json", "destination": "/client/build/manifest.json" },
-    { "source": "/robots.txt", "destination": "/client/build/robots.txt" },
-    { "source": "/(.*)", "destination": "/client/build/$1" },
-    { "source": "/.*", "destination": "/client/build/index.html" }
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/health", "dest": "/api/index.js" },
+    { "src": "/uploads/(.*)", "dest": "/api/index.js" },
+    { "src": "/api/(.*)", "dest": "/api/index.js" },
+    { "src": "/.*", "dest": "/index.html" }
   ]
 }
