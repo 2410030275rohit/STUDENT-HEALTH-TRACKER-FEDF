@@ -11,6 +11,8 @@
   "buildCommand": "npm run build --prefix client",
   "outputDirectory": "client/build",
   "rewrites": [
+    { "source": "/health", "destination": "/api/index.js" },
+    { "source": "/uploads/(.*)", "destination": "/api/index.js" },
     { "source": "/api/(.*)", "destination": "/api/index.js" },
     { "source": "/static/(.*)", "destination": "/client/build/static/$1" },
     { "source": "/assets/(.*)", "destination": "/client/build/assets/$1" },
