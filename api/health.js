@@ -1,5 +1,6 @@
+// Removed: standalone health serverless function
 module.exports = (req, res) => {
-  res.statusCode = 200;
+  res.statusCode = 410;
   res.setHeader('Content-Type', 'application/json');
-  res.end(JSON.stringify({ status: 'ok' }));
+  res.end(JSON.stringify({ error: 'Gone', message: 'Serverless health disabled' }));
 };

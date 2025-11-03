@@ -5,32 +5,9 @@
 
  4. Open http://localhost:3000
 
-## Deploying to Vercel
+## Deployment
 
-This project is preconfigured for Vercel with:
-- Static frontend from `client/build`
-- Serverless API at `api/index.js` wrapping the Express app
-
-Steps
-1) In Vercel, choose your team and import this GitHub repository from the REPO ROOT (not `client`).
-2) Project name must use lowercase letters, digits, `-` or `_` (e.g., `student-health-tracker-fedf`).
-3) Set Environment Variables (Production and Preview):
-	- `MONGODB_URI` = your MongoDB (Atlas) connection string
-	- `JWT_SECRET` = a strong random string
-	- `JWT_EXPIRE` = 7d
-	- `NODE_ENV` = production
-	- `OPENAI_API_KEY` = (optional) enable AI features
-	- `REACT_APP_API_BASE_URL` = leave unset to use same-origin `/api`
-4) Click Deploy. Vercel will build the frontend and route `/api/*` to the serverless function.
-
-Post-deploy checks
-- Visit `/health` on your deployed domain → expect `{ "status": "ok" }`.
-- Try login/register (requires `MONGODB_URI` and `JWT_SECRET`).
-- Use the Chatbot upload (small PDF/JPG/PNG) to test OCR+summary.
-
-Notes
-- Vercel uses temporary storage for uploads; good for analysis, not long-term persistence.
-- Very large images might hit serverless timeout (set to 60s in `vercel.json`).
+Cloud deployment instructions (Vercel/Netlify/Render) have been removed for now to keep the project focused on local development. If you want them back later, we can add a separate guide.
 # 🏥 Secure Medical Records Website
 
 ## 🚀 Quick Start Guide
