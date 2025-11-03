@@ -98,7 +98,7 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <ErrorBoundary>
-          <MainLayout />
+        {/* External embed disabled during stabilization */}
         </ErrorBoundary>
       </AuthProvider>
     </ThemeProvider>
