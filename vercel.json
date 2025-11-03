@@ -1,8 +1,0 @@
-{
-  "version": 2,
-  "framework": "create-react-app",
-  "installCommand": "npm ci && npm ci --prefix client",
-  "buildCommand": "npm run build --prefix client",
-  "outputDirectory": "client/build",
-  "ignoreCommand": "echo Deploying frontend only"
-}
